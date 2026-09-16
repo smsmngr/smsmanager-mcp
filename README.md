@@ -52,6 +52,13 @@ the server automatically), click the button below, or add the server manually to
 }
 ```
 
+### ChatGPT / Codex
+
+Enable **Developer mode** in ChatGPT settings, then add a plugin with the server URL above —
+sign in and pick a workspace, then invoke it by typing `@`. The
+[SmsManager ChatGPT plugin](https://github.com/smsmngr/smsmanager-chatgpt-plugin) adds workflow
+skills on top of the server.
+
 ### Other MCP clients
 
 Any client that supports **Streamable HTTP** with **OAuth 2.1** (Dynamic Client Registration)
@@ -228,6 +235,8 @@ phone verification and submit at `https://app.smsmanager.com/app/account-verify`
   SmsManager APIs (Claude Code plugin, `npx skills add`).
 - [smsmanager-cursor-plugin](https://github.com/smsmngr/smsmanager-cursor-plugin) — Cursor plugin
   bundling the skills and this MCP server.
+- [smsmanager-chatgpt-plugin](https://github.com/smsmngr/smsmanager-chatgpt-plugin) — ChatGPT/Codex
+  plugin bundling workflow skills and this MCP server.
 - Developer docs: https://smsmanager.com/docs (Czech: https://smsmanager.cz/docs)
 
 ## License
