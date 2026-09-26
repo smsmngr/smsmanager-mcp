@@ -7,7 +7,7 @@ messages, check delivery, manage API keys, top up credit, order senders, and che
 - **Endpoint:** `https://app-api.smsmanager.com/functions/v1/mcp`
 - **Transport:** Streamable HTTP
 - **Auth:** OAuth 2.1, per user — **no API keys to configure**
-- **Interactive UI:** [MCP Apps](#interactive-ui-mcp-apps) — compose & send SMS, delivery status,
+- **Interactive UI:** [MCP Apps](#interactive-ui-mcp-apps) — compose wizard, delivery status,
   order confirmation and billing forms right in the chat (Claude, ChatGPT, VS Code, …)
 
 Every request acts as one signed-in SmsManager user, scoped to **one workspace** the user picks
@@ -117,10 +117,11 @@ Prepares an SMS draft for you to review — **sends nothing**. All inputs are op
 `to`, `text`, `sender`, `schedule_at`. Returns the draft plus the workspace's senders, credit and
 prices.
 
-In clients with MCP Apps support this opens the **compose form**: recipients (validated as you
-type), text with a live character / SMS-part counter, sender picker, *Now / Later* with a
-date-time picker, a cost estimate against your credit, and a *Transactional* switch. You press
-**Send** (or **Schedule**) yourself — the assistant is told it was sent and won't send it again.
+In clients with MCP Apps support this opens a short **compose wizard** — **Recipients** →
+**Message** (with a live SMS-part counter and sender picker) → **When** (now or later) →
+**Review** (summary, cost estimate against your credit). It skips straight to Review when the
+assistant already filled everything in. You press **Send now** (or **Schedule**) yourself — the
+assistant is told it was sent and won't send it again.
 Clients without the UI get the draft as text; the assistant confirms it with you and calls
 `send_message`.
 
@@ -222,11 +223,11 @@ Flags a paid service to cancel at the end of the paid period (no refund; stays a
 ## Common workflows
 
 **Send and confirm delivery**
-`compose_message` (you fill in and send the form) — or `send_message` directly → note the
+`compose_message` (you complete and send the wizard) — or `send_message` directly → note the
 `message_id` → `get_message_status` (or `list_messages` for a day's overview).
 
 **Schedule a message**
-`compose_message` → pick *Later* in the form — or `send_message` with `schedule_at`.
+`compose_message` → pick *Later* in the wizard — or `send_message` with `schedule_at`.
 
 **Top up credit (bank transfer)**
 `get_billing_details` → if empty, `set_billing_details` → `get_topup_details` → make the transfer
@@ -253,8 +254,8 @@ which supporting clients render in a sandboxed frame inside the conversation:
 
 | Tool | View |
 |------|------|
-| `compose_message` | Compose & send form (recipients, text, sender, schedule, cost) |
-| `send_message`, `get_message_status`, `list_messages` | Delivery status with *Refresh* |
+| `compose_message` | Compose wizard: recipients → message → when → review |
+| `send_message`, `get_message_status`, `list_messages` | Delivery status table with *Refresh* |
 | `order_service` (quote) | Order confirmation card |
 | `get_billing_details` | Billing form + top-up details |
 
