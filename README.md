@@ -7,6 +7,8 @@ messages, check delivery, manage API keys, top up credit, order senders, and che
 - **Endpoint:** `https://app-api.smsmanager.com/functions/v1/mcp`
 - **Transport:** Streamable HTTP
 - **Auth:** OAuth 2.1, per user — **no API keys to configure**
+- **Interactive UI:** [MCP Apps](#interactive-ui-mcp-apps) — compose wizard, delivery status,
+  order confirmation and billing forms right in the chat (Claude, ChatGPT, VS Code, …)
 
 Every request acts as one signed-in SmsManager user, scoped to **one workspace** the user picks
 when they connect.
@@ -89,7 +91,8 @@ different workspace on the consent screen.
 
 ## Tools
 
-Legend: 🔎 read-only · ✏️ writes/changes state · 💸 spends credit
+Legend: 🔎 read-only · ✏️ writes/changes state · 💸 spends credit · 🖼️ opens an interactive view in
+clients with [MCP Apps](#interactive-ui-mcp-apps) support
 
 ### Identity & account
 
@@ -109,23 +112,41 @@ description / sample message on file. No input.
 
 ### Messaging
 
-#### `send_message` ✏️💸
-Send a real SMS to up to 10 recipients.
+#### `compose_message` 🔎🖼️
+Prepares an SMS draft for you to review — **sends nothing**. All inputs are optional prefills:
+`to`, `text`, `sender`, `schedule_at`. Returns the draft plus the workspace's senders, credit and
+prices.
+
+In clients with MCP Apps support this opens a short **compose wizard** — **Recipients** →
+**Message** (with a live SMS-part counter and sender picker) → **When** (now or later) →
+**Review** (summary, cost estimate against your credit). It skips straight to Review when the
+assistant already filled everything in. You press **Send now** (or **Schedule**) yourself — the
+assistant is told it was sent and won't send it again.
+Clients without the UI get the draft as text; the assistant confirms it with you and calls
+`send_message`.
+
+#### `send_message` ✏️💸🖼️
+Send a real SMS to up to 10 recipients — now or later.
 - `to` — array of phone numbers, E.164 **without** the leading `+` (e.g. `420777123456`), 1–10 entries
 - `text` — message body, 1–1000 chars
 - `sender` *(optional)* — a registered sender ID; omit to use the workspace default
+- `schedule_at` *(optional)* — send later: ISO 8601 with a timezone offset, e.g.
+  `2026-10-01T09:00:00+02:00` (1 minute to 365 days ahead). Credit is charged at send time.
+- `tag` *(optional)* — comma-separated tags to group messages; `transactional` and `priority` are
+  special. Untagged messages are `promotional` and checked against the opt-out list.
 
-Returns a `request_id` and per-recipient `message_id`s. A recipient in `rejected` was **not** sent
-(bad number or no credit).
+Returns a `request_id`, `scheduled_at` and `recipients` — each number with its `status`
+(`accepted` / `rejected`) and `message_id`. A `rejected` recipient was **not** sent (bad number or
+no credit).
 
-#### `get_message_status` 🔎
+#### `get_message_status` 🔎🖼️
 Delivery status of one message.
 - `message_id` — from a send result
 
 `delivery_code` `201` = delivered, `202` = seen. An unknown id returns `message: null` (not an
 error).
 
-#### `list_messages` 🔎
+#### `list_messages` 🔎🖼️
 Sent messages for one day (paginated).
 - `date` — `YYYY-MM-DD`
 - `tag`, `phone_number` *(optional)* — filters
@@ -155,9 +176,10 @@ Creates a new child API key for an integration and returns it.
 #### `get_credit` 🔎
 Current credit balance and account currency. No input.
 
-#### `get_billing_details` 🔎
+#### `get_billing_details` 🔎🖼️
 Invoicing details on file (name, address, company id, VAT). Empty fields mean billing isn't set up
-yet. **Billing must be filled before credit can be topped up.**
+yet. **Billing must be filled before credit can be topped up.** With MCP Apps this is an editable
+form that saves directly and can show the bank-transfer top-up details.
 
 #### `set_billing_details` ✏️
 Fills or updates invoicing details. Pass only the fields you want to change — existing values are
@@ -178,7 +200,7 @@ is done in the dashboard.) No input.
 Catalog of orderable paid services (alphanumeric sender IDs, dedicated virtual numbers, SIM
 hosting, …) with setup and monthly fees per currency. Use it to find a `service_id`. No input.
 
-#### `order_service` ✏️💸
+#### `order_service` ✏️💸🖼️
 Order a paid service. **Spends credit.**
 - `service_id` — from `list_services`, e.g. `sender_sms_420_alnum`
 - `period` *(optional)* — `once` / `month` / `quarter` / `year` (the service minimum may override)
@@ -187,7 +209,8 @@ Order a paid service. **Spends credit.**
 - `confirm` *(optional, default `false`)* — **`false` = dry-run quote (no charge); `true` = place the real order**
 
 Always call with `confirm: false` first to get the exact `total_fee`, confirm it, then call again
-with `confirm: true`.
+with `confirm: true`. With MCP Apps the quote is a card with a **Confirm and pay** button that
+places exactly the quoted order.
 
 #### `cancel_service` ✏️
 Flags a paid service to cancel at the end of the paid period (no refund; stays active until
@@ -200,8 +223,11 @@ Flags a paid service to cancel at the end of the paid period (no refund; stays a
 ## Common workflows
 
 **Send and confirm delivery**
-`send_message` → note the `message_id` → `get_message_status` (or `list_messages` for a day's
-overview).
+`compose_message` (you complete and send the wizard) — or `send_message` directly → note the
+`message_id` → `get_message_status` (or `list_messages` for a day's overview).
+
+**Schedule a message**
+`compose_message` → pick *Later* in the wizard — or `send_message` with `schedule_at`.
 
 **Top up credit (bank transfer)**
 `get_billing_details` → if empty, `set_billing_details` → `get_topup_details` → make the transfer
@@ -220,9 +246,45 @@ phone verification and submit at `https://app.smsmanager.com/app/account-verify`
 
 ---
 
+## Interactive UI (MCP Apps)
+
+The server implements the [MCP Apps](https://github.com/modelcontextprotocol/ext-apps) extension
+(`io.modelcontextprotocol/ui`). Tools marked 🖼️ link to the `ui://smsmanager/app.html` resource,
+which supporting clients render in a sandboxed frame inside the conversation:
+
+| Tool | View |
+|------|------|
+| `compose_message` | Compose wizard: recipients → message → when → review |
+| `send_message`, `get_message_status`, `list_messages` | Delivery status table with *Refresh* |
+| `order_service` (quote) | Order confirmation card |
+| `get_billing_details` | Billing form + top-up details |
+
+- **Supported clients:** Claude (web, desktop, mobile), ChatGPT, VS Code, Goose and other MCP Apps
+  hosts. Clients without it (e.g. Claude Code, Cursor) get the same tools with text results.
+- **Security:** the view makes no network requests of its own. It only receives tool results and
+  acts through tool calls the client forwards to this server, so your API key and login token
+  never reach it. Sending, ordering and saving always need an explicit click.
+
+---
+
+## Protocol compatibility
+
+- **MCP spec:** 2025-11-25 and earlier (TypeScript SDK 1.30), stateless Streamable HTTP with JSON
+  responses, OAuth 2.1 resource server with protected-resource metadata and Dynamic Client
+  Registration. Tools return `structuredContent` alongside text, and the send/compose tools
+  declare an `outputSchema`.
+- **"MCP 2.0":** there is no spec with that name — spec revisions are dated. The newest,
+  **2026-07-28** (stateless handshake, multi round-trip requests), will be adopted together with
+  the v2 TypeScript SDK once major clients support it; the server is already stateless and
+  session-free, which is what that revision requires.
+- **Extensions:** MCP Apps (`io.modelcontextprotocol/ui`, stable spec 2026-01-26).
+
+---
+
 ## Limitations
 
 - One workspace per connection; switching means reconnecting.
+- Up to 10 recipients per `send_message` call (and per compose form).
 - Account activation (phone verification, review submission) is completed in the browser — the
   tools read status and help prepare, but can't submit it.
 - `get_topup_details` returns bank-transfer instructions only; card top-up is in the dashboard.
